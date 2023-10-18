@@ -1127,7 +1127,7 @@ Masking is our own decision based on intuition: it is not specified in the origi
 mask <- capacity_r
 mask[mask > 0] <- 1
 drw <- drw * mask
-plot(drw, breaks = "pretty")
+plot(drw)
 ```
 
 Classify drought exposure into quintile classes (0 to 4) Then rescale to 20% by multiplying by 4.
@@ -1161,6 +1161,35 @@ drought_r_continuous<- st_apply(drw, 1:2, drought_risk_continuous)
 
 plot(drought_r)
 plot(drought_r_continuous)
+
+
+```
+Visualize the distribution of the values of raster data of drought risk. 
+```{r}
+# Function to create a histogram in stars form
+stars_histogram <- function(drw, n_breaks = 30, min_value = NULL, max_value = NULL) {
+  if (is.null(min_value)) min_value <- min(drw, na.rm = TRUE)
+  if (is.null(max_value)) max_value <- max(drw, na.rm = TRUE)
+  
+  breaks <- seq(min_value, max_value, length.out = n_breaks + 1)
+  hist_data <- hist(drw, breaks = breaks, plot = FALSE)
+  
+  # Create stars object
+  s <- st_as_stars(hist_data)
+  st_set_dimensions(s)[[1]] <- st_dimension(s)
+  
+  return(s)
+}
+
+# Example usage:
+# Replace 'your_data' with your actual data
+drw <- rnorm(1000)  # Replace with your own data
+histogram_stars <- stars_histogram(drw)
+
+# Plot the histogram in stars form
+plot(histogram_stars)
+
+
 ```
 
 
@@ -1324,38 +1353,27 @@ vuln_map
 ```
 
 ```{r}
-# select TAs and relevant info. 134 TAs.
-zonal_ta_input <- ta_v %>% 
-  select(geom, NAME_2, TYPE_2) %>% 
-  filter(TYPE_2 == "Traditional Authority")
 
 # take mean vulnerability score across TA
-ta_vuln <- aggregate(vulnerability_r, zonal_ta_input, FUN = mean) %>% 
+mean_ta_vuln <- aggregate(vulnerability_r, ta_v, FUN = mean) %>% 
   st_as_sf()
 
-# plot vulnerability score for each TA
-ta_vuln_map <- ggplot() + 
-  geom_sf(
-    data = ta_vuln, 
-    aes(fill = vulnerability, 
-        label = vulnerability),
-    color = "grey98"
-  ) +
-  #geom_sf_text(data = ta_vuln, aes(label = round(vulnerability, digits = 0)), size = 1) +
-  scale_fill_continuous(
-    name = "Mean Vulnerability Score Per TA", 
-    low="lemonchiffon1", 
-    high="lightcoral",
-    na.value = "transparent"
-  ) +
-  scale_y_continuous(breaks=seq(-17,-10,1)) +
-  scale_x_continuous(breaks=seq(33,36,1)) +
-  theme(axis.title.x = element_blank(),
-        axis.title.y = element_blank())
-
-ta_vuln_map
 ```
 
+```{r}
+# Map the vulnerability score by TA
+breaks_vuln_ta <- classIntervals(mean_ta_vuln$vulnerability, 4, style = "jenks")$brks
+
+
+tmap_mode("plot")
+tm_shape(mean_ta_vuln)+
+  tm_polygons(col = "vulnerability", breaks = breaks_vuln_ta, title = "Malawi Vulnerability Score (TA)", palette = "OrRd", lwd = 0.1, border.col = "grey")+
+  tm_layout(main.title = "Malawi Vulnerability Score", main.title.size = 0.9, main.title.position = "center", frame = FALSE)+
+  tm_layout(legend.width=2, legend.text.size = .3, legend.title.size = 0.5, asp=0.8)
+
+
+
+```
 
 
 
@@ -1411,7 +1429,43 @@ orfig5rast <- orfig5rast %>%
   mutate(orv = (1 - (bg_mean - orvmin) / (ormax - orvmin)) * 100)
 # or is Re-scaled from 0 to 100 with (value - min)/(max - min)
 # it is also inverted, because higher blue values are less red
+
+
 rm(orvmin, orvmax)
+```
+### Alex's Modification
+
+After creating the mean vulnerability score for each TA in our reproduction, I decide also to create mean vulnerability score for each TA using the data from the original study. 
+
+```{r original-Fig5-TA-Vulnerability-mapping1}
+# take mean vulnerability score across TA
+mean_ta_vuln_orig <- aggregate(orfig5rast, ta_v, FUN = mean) %>% 
+  st_as_sf()
+
+```
+
+```{r original-Fig5-TA-Vulnerability-mapping2}
+# Map the vulnerability score by TA
+breaks_vuln_ta_orig <- classIntervals(mean_ta_vuln_orig$orv, 4, style = "jenks")$brks
+
+
+tmap_mode("plot")
+tm_shape(mean_ta_vuln_orig)+
+  tm_polygons(col = "orv", breaks = breaks_vuln_ta_orig, title = "Malawi Vulnerability Score (TA)", palette = "OrRd", lwd = 0.1, border.col = "grey")+
+  tm_layout(main.title = "Malawi Vulnerability Score (Original)", main.title.size = 0.9, main.title.position = "center", frame = FALSE)+
+  tm_layout(legend.width=2, legend.text.size = .3, legend.title.size = 0.5, asp=0.8)
+
+
+
+comparison_ta_vul <- st_join(mean_ta_vuln_orig, mean_ta_vuln, join=st_intersects) %>%
+  mutate(diff = orv.x - vulnerability)
+
+tmap_mode("plot")
+tm_shape(comparison_ta_vul)+
+  tm_polygons(col = "diff", title = "Original - Reproduction", palette = "BrBG", lwd = 0.1, border.col = "grey")+
+  tm_layout(main.title = "Malawi Vulnerability Score Comparison", main.title.size = 0.9, main.title.position = "center", frame = FALSE)+
+  tm_layout(legend.width=2, legend.text.size = .3, legend.title.size = 0.5, asp=0.8)
+
 ```
 
 #### Compare vulnerability result
