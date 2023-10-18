@@ -110,10 +110,12 @@ if(!require(here)){
   require(here)
 }
 
+
+
 groundhog.day <- "2023-09-01"
 set.groundhog.folder(here("data", "scratch", "groundhog"))
 
-groundhog.library(packages, groundhog.day)
+groundhog.library(packages, groundhog.day, tolerate.R.version='4.2.0')
 # you may need to...
 # install a correct version of R
 # install the rstudioapi package with install.packages("rstudioapi")
@@ -129,6 +131,7 @@ writeLines(
   capture.output(sessionInfo()),
   here("procedure", "environment", paste0("r-environment-", Sys.Date(), ".txt"))
 )
+
 ```
 
 ```{r file-paths}
@@ -171,6 +174,22 @@ if (!"major_lakes.csv" %in% list.files(public_r)) {
 Dissolve lakes into a single multi-part feature with one field `EA` containing the value `Lake`.
 
 ```{r load-lakes, message = F}
+library(sf)
+library(downloader)
+library(tidyverse)
+library(rdhs)
+library(haven)
+library(readr)
+library(pastecs)
+library(stars)
+library(sp)
+library(classInt)
+library(tmap)
+library(units)
+library(knitr)
+#library(rgdal)
+
+
 lakes_v <- st_as_sf(read_csv(here(public_r, "major_lakes.csv"))[, c("name", "the_geom")],
                  wkt = "the_geom",
                  crs = 4326) %>%
@@ -257,11 +276,6 @@ This data must be downloaded directly from GADM.
 While the data license permits free use of data for research purposes and publication, it does not permit redistribution.
 
 ```{r download-traditional-authorities, message = FALSE}
-if (!"MWI_adm2.shp" %in% list.files(private_r)) {
-  download(
-    "https://biogeo.ucdavis.edu/data/gadm2.8/shp/MWI_adm_shp.zip",
-    here(scratch, "MWI_adm_shp.zip")
-  )
 
   # list all the second administrative level (traditional authority) files
   # (code developed before GADM started offering more useful file types)
@@ -274,9 +288,7 @@ if (!"MWI_adm2.shp" %in% list.files(private_r)) {
     files = MWI_adm_files
   )
   rm(MWI_adm_files)
-} else {
-  message("Traditional authorites data already downloaded.")
-}
+
 ```
 
 ## Traditional authorities (TAs)
@@ -1115,7 +1127,7 @@ Masking is our own decision based on intuition: it is not specified in the origi
 mask <- capacity_r
 mask[mask > 0] <- 1
 drw <- drw * mask
-plot(drw)
+plot(drw, breaks = "pretty")
 ```
 
 Classify drought exposure into quintile classes (0 to 4) Then rescale to 20% by multiplying by 4.
@@ -1137,7 +1149,8 @@ drought_risk <- function(x) {
 }
 
 drought_risk_continuous <- function(x) {
-  (x - qt[[1]])/(qt[[6]] - qt [[1]]) * 20
+  x = (x - qt[[1]])/(qt[[6]] - qt[[1]]) * 20
+  x
 }
 
 # apply reclassification function to x:y dimensions of drw 
@@ -1145,9 +1158,11 @@ drought_r <- st_apply(drw, 1:2, drought_risk)
 
 drought_r_continuous<- st_apply(drw, 1:2, drought_risk_continuous)
 
+
 plot(drought_r)
 plot(drought_r_continuous)
 ```
+
 
 ### Flood risk
 
@@ -1274,7 +1289,7 @@ plot(vulnerability_r)
 
 vulnerability_r_cont <- (40 - capacity_r) + sensitivity_r + drought_r_continuous + flood_r 
 # 100 = highest vulnerability, 0 = lowest vulnerability
-names(vulnerability_r_cont) <- "vulnerability"
+names(vulnerability_r_cont) <- "vulnerability_drought"
 plot(vulnerability_r_cont)
 ```
 
@@ -1307,6 +1322,42 @@ vuln_map = ggplot() +
 
 vuln_map
 ```
+
+```{r}
+# select TAs and relevant info. 134 TAs.
+zonal_ta_input <- ta_v %>% 
+  select(geom, NAME_2, TYPE_2) %>% 
+  filter(TYPE_2 == "Traditional Authority")
+
+# take mean vulnerability score across TA
+ta_vuln <- aggregate(vulnerability_r, zonal_ta_input, FUN = mean) %>% 
+  st_as_sf()
+
+# plot vulnerability score for each TA
+ta_vuln_map <- ggplot() + 
+  geom_sf(
+    data = ta_vuln, 
+    aes(fill = vulnerability, 
+        label = vulnerability),
+    color = "grey98"
+  ) +
+  #geom_sf_text(data = ta_vuln, aes(label = round(vulnerability, digits = 0)), size = 1) +
+  scale_fill_continuous(
+    name = "Mean Vulnerability Score Per TA", 
+    low="lemonchiffon1", 
+    high="lightcoral",
+    na.value = "transparent"
+  ) +
+  scale_y_continuous(breaks=seq(-17,-10,1)) +
+  scale_x_continuous(breaks=seq(33,36,1)) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+ta_vuln_map
+```
+
+
+
 
 ```{r saving spatial data outputs}
 write_stars(capacity_r, here("data","derived","public","ta_capacity.tif"))
