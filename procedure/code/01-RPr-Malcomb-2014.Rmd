@@ -1132,6 +1132,9 @@ plot(drw)
 
 Classify drought exposure into quintile classes (0 to 4) Then rescale to 20% by multiplying by 4.
 
+### Modification
+I will preserve the continuity nature of the drought data by rescaling it to 0 to 20. 
+
 ```{r drought-rescale}
 # quintile break points
 qt <- quantile(drw[[1]], probs = seq(0, 1, 0.2), na.rm = T)
@@ -1165,32 +1168,7 @@ plot(drought_r_continuous)
 
 ```
 Visualize the distribution of the values of raster data of drought risk. 
-```{r}
-# Function to create a histogram in stars form
-stars_histogram <- function(drw, n_breaks = 30, min_value = NULL, max_value = NULL) {
-  if (is.null(min_value)) min_value <- min(drw, na.rm = TRUE)
-  if (is.null(max_value)) max_value <- max(drw, na.rm = TRUE)
-  
-  breaks <- seq(min_value, max_value, length.out = n_breaks + 1)
-  hist_data <- hist(drw, breaks = breaks, plot = FALSE)
-  
-  # Create stars object
-  s <- st_as_stars(hist_data)
-  st_set_dimensions(s)[[1]] <- st_dimension(s)
-  
-  return(s)
-}
 
-# Example usage:
-# Replace 'your_data' with your actual data
-drw <- rnorm(1000)  # Replace with your own data
-histogram_stars <- stars_histogram(drw)
-
-# Plot the histogram in stars form
-plot(histogram_stars)
-
-
-```
 
 
 ### Flood risk
@@ -1308,6 +1286,9 @@ Calculate an aggregated vulnerability score by adding low adaptive capacity (inv
 $$
 Vulnerability = (40 - Adaptive Capacity) + Livelihood Sensitivity + Drought Exposure + Flood Risk
 $$
+### Modification
+
+To visualize the effect of preserving one continuous data, I create a seperate vulnerability score map using the continuous drough data I created above. 
 
 ```{r combined-vulnerability}
 # final output (adding component rasters)
@@ -1318,9 +1299,11 @@ plot(vulnerability_r)
 
 vulnerability_r_cont <- (40 - capacity_r) + sensitivity_r + drought_r_continuous + flood_r 
 # 100 = highest vulnerability, 0 = lowest vulnerability
-names(vulnerability_r_cont) <- "vulnerability_drought"
+names(vulnerability_r_cont) <- "vulnerability_conti_drought"
 plot(vulnerability_r_cont)
 ```
+
+Comparing the map using discrete drought data and continuous drought data, we can see that the drought data is less apparent in the continuous map than the discrete map. One reason might be the existence of outliers in the drought data. 
 
 ```{r find break & limit values for vulnerability map}
 vuln_max <- max(vulnerability_r[[1]],na.rm = TRUE)
@@ -1351,6 +1334,8 @@ vuln_map = ggplot() +
 
 vuln_map
 ```
+### Modification
+The raster map of vulnerability score provides us with detailed and continuous information on where are the places that may experience high vulnerability due to climate change. For management purposes, a map showing which administrative district with higher vulnerability is also useful. Therefore, I decide to create a map, on the Traditional Authority level, demonstrating which TA have relatively higher vulnerability score. 
 
 ```{r}
 
@@ -1433,9 +1418,9 @@ orfig5rast <- orfig5rast %>%
 
 rm(orvmin, orvmax)
 ```
-### Alex's Modification
+### Modification
 
-After creating the mean vulnerability score for each TA in our reproduction, I decide also to create mean vulnerability score for each TA using the data from the original study. 
+After creating the mean vulnerability score for each TA in our reproduction, I decide also to create mean vulnerability score for each TA using the data from the original study. Additionally, I calculate the TA-level vulnerability score difference between the reproduction study and the original study. The vulnerability comparison map could be used to cross-reference with the adaptive capacity comparison map above and, in turn, help us to identify where additional deviance were introduced since the adaptive capacity map. 
 
 ```{r original-Fig5-TA-Vulnerability-mapping1}
 # take mean vulnerability score across TA
@@ -1458,7 +1443,7 @@ tm_shape(mean_ta_vuln_orig)+
 
 
 comparison_ta_vul <- st_join(mean_ta_vuln_orig, mean_ta_vuln, join=st_intersects) %>%
-  mutate(diff = orv.x - vulnerability)
+  mutate(diff = vulnerability - orv)
 
 tmap_mode("plot")
 tm_shape(comparison_ta_vul)+
@@ -1545,6 +1530,17 @@ write_stars(vulnerability_r, here(public_d, "fig5rp.tif"), layer = "rpv")
 ```
 
 # Discussion
+
+The reproduction result is not ideal. Given the Spearman's rank correlation rho index, the vulnerability score we calculated is not related with the original data. Reading the comparison graph of the vulnerability score, we notice that we have overestimated the score in Southern Malawi Region, a spatial pattern that did not appear in the adaptive capacity step. Reflecting the methodologies and data used throughout the study, there are several reasons that attribute to the uncorrelated result in the reproduction study
+
+- Lack of important data in the Original Study
+Figure 5 of the original study (Malawi Vulnerability to Climate Change) indicates where are the places that have relative higher or lower vulnerability score. However, the figure does not indicate the specific values of the scores. When reproducing the study, we have to develop method to interpret and assign arbitrary values to this colors, which may not be the exact value the author had produced. 
+
+- Mixing continuous and discrete numerical data
+The lack of uniformity between data is another reason that complicates the reproduction study. For example, drought data and flood data, which are both under the Physical Exposure category, have distinct type of data: the drought data is continuous and the flood data is discrete. The quintile method we used to convert the continuous drought data into discrete data arbitrarily exaggerated or dismissed the original difference between data. A re-scaling method that could preserve the continuous data nuances should be introduced to the study. 
+
+- Mixing continuous and discrete spatial data
+Between calculating adaptive capacity and vulnerability score, the original study and our reproduction study have to convert the vector data into raster data. Additionally, we have to transform the livelihood sensitivity score (calculated in vector space based on the livelihood polygons) into raster data. Moreover, within raster data, different data have different resolution. Each step of spatial data transformation build up uncertainty. 
 
 # Conclusions
 
