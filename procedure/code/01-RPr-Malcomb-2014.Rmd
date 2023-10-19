@@ -2,7 +2,7 @@
 title: "Reproduction Analysis of Malcomb et al 2014"
 author: "Joseph Holler, Kufre Udoh, Drew An-Pham, Middlebury Open GIScience Classes"
 date: "`r Sys.Date()`"
-output: pdf_document
+output: html_document
 editor_options:
   markdown:
     wrap: sentence
@@ -90,7 +90,7 @@ The original study was conducted using STATA™ (4.4) and ArcGIS™ (4.6, F3 and
 The study was originally conducted using ArcGIS and unspecified statistical software.
 This reproduction study uses R, including the rdhs package for DHS survey data, the sf package for vector analysis, the stars package for raster analysis, and the tmap package for cartography.
 
-```{r setup, include = FALSE}
+```{r setup, eval = FALSE, include = FALSE}
 # list of required packages
 packages = c("downloader", "rdhs", "haven", "readr", "tidyverse", "pastecs",
              "stars", "sf", "sp", "classInt", 
@@ -135,6 +135,7 @@ writeLines(
 ```
 
 ```{r file-paths}
+library(here)
 # set up default knitr parameters
 knitr::opts_chunk$set(
   echo = FALSE,
@@ -187,6 +188,7 @@ library(classInt)
 library(tmap)
 library(units)
 library(knitr)
+library(here)
 #library(rgdal)
 
 
@@ -1175,7 +1177,7 @@ Visualize the distribution of the values of raster data of drought risk.
 
 Clip and warp flood risk to match our extent and spatial resolution.
 
-```{r clip-map-drought-exposure, warning = F}
+```{r clip-map-drought-exposure_2, warning = F}
 names(fl) <- "fl"
 # convert from factors to numeric
 fl$fl <- fl$fl %>% as.character() %>% as.numeric() %>% matrix(dim(fl)[1])
@@ -1533,8 +1535,8 @@ write_stars(vulnerability_r, here(public_d, "fig5rp.tif"), layer = "rpv")
 
 The reproduction result is not ideal. Given the Spearman's rank correlation rho index, the vulnerability score we calculated is not related with the original data. Reading the comparison graph of the vulnerability score, we notice that we have overestimated the score in Southern Malawi Region, a spatial pattern that did not appear in the adaptive capacity step. Reflecting the methodologies and data used throughout the study, there are several reasons that attribute to the uncorrelated result in the reproduction study
 
-- Lack of important data in the Original Study
-Figure 5 of the original study (Malawi Vulnerability to Climate Change) indicates where are the places that have relative higher or lower vulnerability score. However, the figure does not indicate the specific values of the scores. When reproducing the study, we have to develop method to interpret and assign arbitrary values to this colors, which may not be the exact value the author had produced. 
+- Lack of important data and methodology in the Original Study
+Figure 5 of the original study (Malawi Vulnerability to Climate Change) indicates where are the places that have relative higher or lower vulnerability score. However, the figure does not indicate the specific values of the scores. When reproducing the study, we have to develop method to interpret and assign arbitrary values to this colors, which may not be the exact value the author had produced. In addition, the description in the original study about how data is scaled, formalized, and calculated is vague, and the diversity of data we used exacerbated the error. 
 
 - Mixing continuous and discrete numerical data
 The lack of uniformity between data is another reason that complicates the reproduction study. For example, drought data and flood data, which are both under the Physical Exposure category, have distinct type of data: the drought data is continuous and the flood data is discrete. The quintile method we used to convert the continuous drought data into discrete data arbitrarily exaggerated or dismissed the original difference between data. A re-scaling method that could preserve the continuous data nuances should be introduced to the study. 
